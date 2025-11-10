@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 from .television import TeleVision
 from .constants import *
 from .mat_tool import mat_update, fast_mat_inv
@@ -66,7 +67,7 @@ under (basis) Robot Convention, hand's initial pose convention:
 
 class VisionWrapper:
     def __init__(self, backend='avp_stream', avp_ip='192.168.123.101', binocular=None, img_shape=None, img_shm_name=None,
-                 cert_file=None, key_file=None, ngrok=False):
+                 cert_file=None, key_file=None, ngrok=True):
         """
         Args:
             backend (str): The backend to use, either 'vuer' or 'avp_stream'.
@@ -85,6 +86,10 @@ class VisionWrapper:
 
         self.backend = backend
         if backend == 'vuer':
+            if cert_file is None:
+                cert_file = Path(__file__).parent.parent / "configs/cert.pem"
+            if key_file is None:
+                key_file = Path(__file__).parent.parent / "configs/key.pem"
             self.tv = TeleVision(binocular, img_shape, img_shm_name, cert_file, key_file, ngrok)
         elif backend == 'avp_stream':
             self.tv = VisionProStreamer(ip=avp_ip, record=False)
