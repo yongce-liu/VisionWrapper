@@ -67,7 +67,7 @@ under (basis) Robot Convention, hand's initial pose convention:
 
 class VisionWrapper:
     def __init__(self, backend='avp_stream', avp_ip='192.168.123.101', binocular=None, img_shape=None, img_shm_name=None,
-                 cert_file=None, key_file=None, ngrok=True):
+                 cert_file=None, key_file=None, ngrok=False):
         """
         Args:
             backend (str): The backend to use, either 'vuer' or 'avp_stream'.
