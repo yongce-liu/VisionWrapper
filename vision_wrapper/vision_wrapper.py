@@ -87,9 +87,9 @@ class VisionWrapper:
         self.backend = backend
         if backend == 'vuer':
             if cert_file is None:
-                cert_file = Path(__file__).parent.parent / "configs/cert.pem"
+                cert_file = Path(__file__).parent / "configs/cert.pem"
             if key_file is None:
-                key_file = Path(__file__).parent.parent / "configs/key.pem"
+                key_file = Path(__file__).parent / "configs/key.pem"
             self.tv = TeleVision(binocular, img_shape, img_shm_name, cert_file, key_file, ngrok)
         elif backend == 'avp_stream':
             self.tv = VisionProStreamer(ip=avp_ip, record=False)
