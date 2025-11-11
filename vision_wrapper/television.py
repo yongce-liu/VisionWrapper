@@ -56,8 +56,8 @@ class TeleVision:
 
         self.left_hand_shared = Array("d", 16, lock=True)
         self.right_hand_shared = Array("d", 16, lock=True)
-        self.left_landmarks_shared = Array("d", 75, lock=True)
-        self.right_landmarks_shared = Array("d", 75, lock=True)
+        # self.left_landmarks_shared = Array("d", 75, lock=True)
+        # self.right_landmarks_shared = Array("d", 75, lock=True)
 
         self.head_matrix_shared = Array("d", 16, lock=True)
         self.aspect_shared = Value("d", 1.0, lock=True)
@@ -78,14 +78,16 @@ class TeleVision:
 
     async def on_hand_move(self, event, session, fps=60):
         try:
-            self.left_hand_shared[:] = event.value["leftHand"]
-            self.right_hand_shared[:] = event.value["rightHand"]
-            self.left_landmarks_shared[:] = np.array(
-                event.value["leftLandmarks"]
-            ).flatten()
-            self.right_landmarks_shared[:] = np.array(
-                event.value["rightLandmarks"]
-            ).flatten()
+            left_hand_data = event.value["left"]
+            right_hand_data = event.value["right"]
+            # left_hand_state = event.value["leftState"]
+            # right_hand_state = event.value["rightState"]
+
+            self.extract_hand_poses(left_hand_data, self.left_hand_shared)
+            self.extract_hand_poses(right_hand_data, self.right_hand_shared)
+            # extract_hand_states(left_hand_state, "left")
+            # extract_hand_states(right_hand_state, "right")
+
         except:
             pass
 
@@ -161,13 +163,13 @@ class TeleVision:
     def right_hand(self):
         return np.array(self.right_hand_shared[:]).reshape(4, 4, order="F")
 
-    @property
-    def left_landmarks(self):
-        return np.array(self.left_landmarks_shared[:]).reshape(25, 3)
+    # @property
+    # def left_landmarks(self):
+    #     return np.array(self.left_landmarks_shared[:]).reshape(25, 3)
 
-    @property
-    def right_landmarks(self):
-        return np.array(self.right_landmarks_shared[:]).reshape(25, 3)
+    # @property
+    # def right_landmarks(self):
+    #     return np.array(self.right_landmarks_shared[:]).reshape(25, 3)
 
     @property
     def head_matrix(self):
@@ -176,6 +178,55 @@ class TeleVision:
     @property
     def aspect(self):
         return float(self.aspect_shared.value)
+
+    @staticmethod
+    def extract_hand_poses(
+        hand_data,
+        arm_pose_shared=None,
+        hand_position_shared=None,
+        hand_orientation_shared=None,
+    ):
+        if arm_pose_shared is not None:
+            with arm_pose_shared.get_lock():
+                arm_pose_shared[:] = hand_data[0:16]
+
+        if hand_position_shared is not None:
+            with hand_position_shared.get_lock():
+                for i in range(25):
+                    base = i * 16
+                    hand_position_shared[i * 3 : i * 3 + 3] = [
+                        hand_data[base + 12],
+                        hand_data[base + 13],
+                        hand_data[base + 14],
+                    ]
+
+        if hand_orientation_shared is not None:
+            with hand_orientation_shared.get_lock():
+                for i in range(25):
+                    base = i * 16
+                    hand_orientation_shared[i * 9 : i * 9 + 9] = [
+                        hand_data[base + 0],
+                        hand_data[base + 1],
+                        hand_data[base + 2],
+                        hand_data[base + 4],
+                        hand_data[base + 5],
+                        hand_data[base + 6],
+                        hand_data[base + 8],
+                        hand_data[base + 9],
+                        hand_data[base + 10],
+                    ]
+
+    # def extract_hand_states(state_dict, prefix):
+    #     # pinch
+    #     with getattr(self, f"{prefix}_pinch_state_shared").get_lock():
+    #         getattr(self, f"{prefix}_pinch_state_shared").value = bool(state_dict.get("pinch", False))
+    #     with getattr(self, f"{prefix}_pinch_value_shared").get_lock():
+    #         getattr(self, f"{prefix}_pinch_value_shared").value = float(state_dict.get("pinchValue", 0.0))
+    #     # squeeze
+    #     with getattr(self, f"{prefix}_squeeze_state_shared").get_lock():
+    #         getattr(self, f"{prefix}_squeeze_state_shared").value = bool(state_dict.get("squeeze", False))
+    #     with getattr(self, f"{prefix}_squeeze_value_shared").get_lock():
+    #         getattr(self, f"{prefix}_squeeze_value_shared").value = float(state_dict.get("squeezeValue", 0.0))
 
 
 if __name__ == "__main__":
