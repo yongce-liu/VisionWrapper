@@ -56,8 +56,8 @@ class TeleVision:
 
         self.left_hand_shared = Array("d", 16, lock=True)
         self.right_hand_shared = Array("d", 16, lock=True)
-        # self.left_landmarks_shared = Array("d", 75, lock=True)
-        # self.right_landmarks_shared = Array("d", 75, lock=True)
+        self.left_landmarks_shared = Array("d", 75, lock=True)
+        self.right_landmarks_shared = Array("d", 75, lock=True)
 
         self.head_matrix_shared = Array("d", 16, lock=True)
         self.aspect_shared = Value("d", 1.0, lock=True)
@@ -83,8 +83,12 @@ class TeleVision:
             # left_hand_state = event.value["leftState"]
             # right_hand_state = event.value["rightState"]
 
-            self.extract_hand_poses(left_hand_data, self.left_hand_shared)
-            self.extract_hand_poses(right_hand_data, self.right_hand_shared)
+            self.extract_hand_poses(
+                left_hand_data, self.left_hand_shared, self.left_landmarks_shared
+            )
+            self.extract_hand_poses(
+                right_hand_data, self.right_hand_shared, self.right_landmarks_shared
+            )
             # extract_hand_states(left_hand_state, "left")
             # extract_hand_states(right_hand_state, "right")
 
@@ -163,13 +167,13 @@ class TeleVision:
     def right_hand(self):
         return np.array(self.right_hand_shared[:]).reshape(4, 4, order="F")
 
-    # @property
-    # def left_landmarks(self):
-    #     return np.array(self.left_landmarks_shared[:]).reshape(25, 3)
+    @property
+    def left_landmarks(self):
+        return np.array(self.left_landmarks_shared[:]).reshape(25, 3)
 
-    # @property
-    # def right_landmarks(self):
-    #     return np.array(self.right_landmarks_shared[:]).reshape(25, 3)
+    @property
+    def right_landmarks(self):
+        return np.array(self.right_landmarks_shared[:]).reshape(25, 3)
 
     @property
     def head_matrix(self):
