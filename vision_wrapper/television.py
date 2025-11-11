@@ -7,17 +7,32 @@ import asyncio
 import cv2
 
 from multiprocessing import context
+
 Value = context._default_context.Value
 
 
 class TeleVision:
-    def __init__(self, binocular: bool, img_shape: tuple, img_shm_name: str, cert_file: str, key_file: str, ngrok: bool):
+    def __init__(
+        self,
+        binocular: bool,
+        img_shape: tuple,
+        img_shm_name: str,
+        cert_file: str,
+        key_file: str,
+        ngrok: bool,
+    ):
         self.binocular = binocular
 
         if ngrok:
-            self.vuer = Vuer(host='0.0.0.0', queries=dict(grid=False), queue_len=3)
+            self.vuer = Vuer(host="0.0.0.0", queries=dict(grid=False), queue_len=3)
         else:
-            self.vuer = Vuer(host='0.0.0.0', cert=cert_file, key=key_file, queries=dict(grid=False), queue_len=3)
+            self.vuer = Vuer(
+                host="0.0.0.0",
+                cert=cert_file,
+                key=key_file,
+                queries=dict(grid=False),
+                queue_len=3,
+            )
 
         self.vuer.add_handler("HAND_MOVE")(self.on_hand_move)
         self.vuer.add_handler("CAMERA_MOVE")(self.on_cam_move)
@@ -25,38 +40,39 @@ class TeleVision:
         if not img_shape is None:
             self.img_height = img_shape[0]
             if binocular:
-                self.img_width  = img_shape[1] // 2
+                self.img_width = img_shape[1] // 2
             else:
-                self.img_width  = img_shape[1]
+                self.img_width = img_shape[1]
 
             existing_shm = shared_memory.SharedMemory(name=img_shm_name)
-            self.img_array = np.ndarray(img_shape, dtype=np.uint8, buffer=existing_shm.buf)
+            self.img_array = np.ndarray(
+                img_shape, dtype=np.uint8, buffer=existing_shm.buf
+            )
 
             if binocular:
                 self.vuer.spawn(start=False)(self.main_image_binocular)
             else:
                 self.vuer.spawn(start=False)(self.main_image_monocular)
 
-        self.left_hand_shared = Array('d', 16, lock=True)
-        self.right_hand_shared = Array('d', 16, lock=True)
-        self.left_landmarks_shared = Array('d', 75, lock=True)
-        self.right_landmarks_shared = Array('d', 75, lock=True)
-        
-        self.head_matrix_shared = Array('d', 16, lock=True)
-        self.aspect_shared = Value('d', 1.0, lock=True)
+        self.left_hand_shared = Array("d", 16, lock=True)
+        self.right_hand_shared = Array("d", 16, lock=True)
+        self.left_landmarks_shared = Array("d", 75, lock=True)
+        self.right_landmarks_shared = Array("d", 75, lock=True)
+
+        self.head_matrix_shared = Array("d", 16, lock=True)
+        self.aspect_shared = Value("d", 1.0, lock=True)
 
         self.process = Process(target=self.vuer_run)
         self.process.daemon = True
         self.process.start()
 
-    
     def vuer_run(self):
         self.vuer.run()
 
     async def on_cam_move(self, event, session, fps=60):
         try:
             self.head_matrix_shared[:] = event.value["camera"]["matrix"]
-            self.aspect_shared.value = event.value['camera']['aspect']
+            self.aspect_shared.value = event.value["camera"]["aspect"]
         except:
             pass
 
@@ -64,25 +80,31 @@ class TeleVision:
         try:
             self.left_hand_shared[:] = event.value["leftHand"]
             self.right_hand_shared[:] = event.value["rightHand"]
-            self.left_landmarks_shared[:] = np.array(event.value["leftLandmarks"]).flatten()
-            self.right_landmarks_shared[:] = np.array(event.value["rightLandmarks"]).flatten()
-        except: 
+            self.left_landmarks_shared[:] = np.array(
+                event.value["leftLandmarks"]
+            ).flatten()
+            self.right_landmarks_shared[:] = np.array(
+                event.value["rightLandmarks"]
+            ).flatten()
+        except:
             pass
-    
+
     async def main_image_binocular(self, session, fps=60):
-        session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
+        session.upsert @ Hands(
+            fps=fps, stream=True, key="hands", showLeft=False, showRight=False
+        )
         while True:
             display_image = cv2.cvtColor(self.img_array, cv2.COLOR_BGR2RGB)
             # aspect_ratio = self.img_width / self.img_height
             session.upsert(
                 [
                     ImageBackground(
-                        display_image[:, :self.img_width],
+                        display_image[:, : self.img_width],
                         aspect=1.778,
                         height=1,
                         distanceToCamera=1,
-                        # The underlying rendering engine supported a layer binary bitmask for both objects and the camera. 
-                        # Below we set the two image planes, left and right, to layers=1 and layers=2. 
+                        # The underlying rendering engine supported a layer binary bitmask for both objects and the camera.
+                        # Below we set the two image planes, left and right, to layers=1 and layers=2.
                         # Note that these two masks are associated with left eye’s camera and the right eye’s camera.
                         layers=1,
                         format="jpeg",
@@ -91,7 +113,7 @@ class TeleVision:
                         interpolate=True,
                     ),
                     ImageBackground(
-                        display_image[:, self.img_width:],
+                        display_image[:, self.img_width :],
                         aspect=1.778,
                         height=1,
                         distanceToCamera=1,
@@ -108,7 +130,9 @@ class TeleVision:
             await asyncio.sleep(0.016 * 2)
 
     async def main_image_monocular(self, session, fps=60):
-        session.upsert @ Hands(fps=fps, stream=True, key="hands", showLeft=False, showRight=False)
+        session.upsert @ Hands(
+            fps=fps, stream=True, key="hands", showLeft=False, showRight=False
+        )
         while True:
             display_image = cv2.cvtColor(self.img_array, cv2.COLOR_BGR2RGB)
             # aspect_ratio = self.img_width / self.img_height
@@ -132,17 +156,15 @@ class TeleVision:
     @property
     def left_hand(self):
         return np.array(self.left_hand_shared[:]).reshape(4, 4, order="F")
-        
-    
+
     @property
     def right_hand(self):
         return np.array(self.right_hand_shared[:]).reshape(4, 4, order="F")
-        
-    
+
     @property
     def left_landmarks(self):
         return np.array(self.left_landmarks_shared[:]).reshape(25, 3)
-    
+
     @property
     def right_landmarks(self):
         return np.array(self.right_landmarks_shared[:]).reshape(25, 3)
@@ -154,10 +176,12 @@ class TeleVision:
     @property
     def aspect(self):
         return float(self.aspect_shared.value)
-    
-if __name__ == '__main__':
-    import os 
+
+
+if __name__ == "__main__":
+    import os
     import sys
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(current_dir)
     sys.path.append(parent_dir)
@@ -166,10 +190,14 @@ if __name__ == '__main__':
 
     # image
     img_shape = (480, 640 * 2, 3)
-    img_shm = shared_memory.SharedMemory(create=True, size=np.prod(img_shape) * np.uint8().itemsize)
+    img_shm = shared_memory.SharedMemory(
+        create=True, size=np.prod(img_shape) * np.uint8().itemsize
+    )
     img_array = np.ndarray(img_shape, dtype=np.uint8, buffer=img_shm.buf)
-    img_client = ImageClient(tv_img_shape = img_shape, tv_img_shm_name = img_shm.name)
-    image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
+    img_client = ImageClient(tv_img_shape=img_shape, tv_img_shm_name=img_shm.name)
+    image_receive_thread = threading.Thread(
+        target=img_client.receive_process, daemon=True
+    )
     image_receive_thread.start()
 
     # television

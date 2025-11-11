@@ -1,7 +1,20 @@
 import numpy as np
 from pathlib import Path
 from .television import TeleVision
-from .constants import *
+from .constants import (
+    T_robot_openxr,
+    const_head_vuer_mat,
+    const_left_wrist_vuer_mat,
+    const_right_wrist_vuer_mat,
+    T_to_unitree_left_wrist,
+    T_to_unitree_right_wrist,
+    T_to_unitree_hand,
+    T_flip_left,
+    T_flip_right,
+    T_z_90,
+    T_z_180,
+    T_x_180,
+)
 from .mat_tool import mat_update, fast_mat_inv
 from avp_stream import VisionProStreamer
 
@@ -65,13 +78,23 @@ under (basis) Robot Convention, hand's initial pose convention:
     p.s. **(Wrist/Hand URDF) Unitree Convention** information come from URDF files.
 """
 
+
 class VisionWrapper:
-    def __init__(self, backend='avp_stream', avp_ip='192.168.123.101', binocular=None, img_shape=None, img_shm_name=None,
-                 cert_file=None, key_file=None, ngrok=False):
+    def __init__(
+        self,
+        backend="avp_stream",
+        avp_ip="192.168.123.101",
+        binocular=None,
+        img_shape=None,
+        img_shm_name=None,
+        cert_file=Path(__file__).parent / "configs/cert.pem",
+        key_file=Path(__file__).parent / "configs/key.pem",
+        ngrok=False,
+    ):
         """
         Args:
             backend (str): The backend to use, either 'vuer' or 'avp_stream'.
-            
+
         Followings are the arguments for avp_stream backend:
             avp_ip (str): The IP address of the AVP streamer.
 
@@ -85,19 +108,23 @@ class VisionWrapper:
         """
 
         self.backend = backend
-        if backend == 'vuer':
-            if cert_file is None:
-                cert_file = Path(__file__).parent / "configs/cert.pem"
-            if key_file is None:
-                key_file = Path(__file__).parent / "configs/key.pem"
-            self.tv = TeleVision(binocular, img_shape, img_shm_name, cert_file, key_file, ngrok)
-        elif backend == 'avp_stream':
+        if backend == "vuer":
+            self.tv = TeleVision(
+                binocular, img_shape, img_shm_name, cert_file, key_file, ngrok
+            )
+        elif backend == "avp_stream":
             self.tv = VisionProStreamer(ip=avp_ip, record=False)
-            if binocular is not None or img_shape is not None or img_shm_name is not None:
-                print("[Warning] binocular, img_shape, img_shm_name are not used for avp_stream backend")
+            if (
+                binocular is not None
+                or img_shape is not None
+                or img_shm_name is not None
+            ):
+                print(
+                    "[Warning] binocular, img_shape, img_shm_name are not used for avp_stream backend"
+                )
         else:
             raise ValueError(f"Invalid backend: {backend}")
-        
+
     def update_image(self, img: np.ndarray):
         """
         Update the image for vuer backend.
@@ -105,14 +132,16 @@ class VisionWrapper:
         Args:
             img (np.ndarray): The image to update, shape (H, W, C), left-right if binocular is True.
         """
-        if self.backend == 'vuer':
-            assert img.shape == self.tv.img_array.shape, f"img shape {img.shape} does not match tv.img_array shape {self.tv.img_array.shape}"
+        if self.backend == "vuer":
+            assert (
+                img.shape == self.tv.img_array.shape
+            ), f"img shape {img.shape} does not match tv.img_array shape {self.tv.img_array.shape}"
             np.copyto(self.tv.img_array, img)
-        elif self.backend == 'avp_stream':
+        elif self.backend == "avp_stream":
             print("[Warning] avp_stream backend does not support updating image")
         else:
             raise ValueError(f"Invalid backend: {self.backend}")
-        
+
     def get_data_full(self):
         """
         Get the data from the backend. Return the data in the following order:
@@ -123,9 +152,9 @@ class VisionWrapper:
             - unitree_right_hand: (25, 3)
         Noticed that there's no translation part in the unitree_left_hand and unitree_right_hand.
         """
-        if self.backend == 'vuer':
+        if self.backend == "vuer":
             return self.get_data_vuer()
-        elif self.backend == 'avp_stream':
+        elif self.backend == "avp_stream":
             return self.get_data_avp_stream()
         else:
             raise ValueError(f"Invalid backend: {self.backend}")
@@ -136,8 +165,12 @@ class VisionWrapper:
 
         # TeleVision obtains a basis coordinate that is OpenXR Convention
         head_vuer_mat = mat_update(const_head_vuer_mat, self.tv.head_matrix.copy())
-        left_wrist_vuer_mat  = mat_update(const_left_wrist_vuer_mat, self.tv.left_hand.copy())
-        right_wrist_vuer_mat = mat_update(const_right_wrist_vuer_mat, self.tv.right_hand.copy())
+        left_wrist_vuer_mat = mat_update(
+            const_left_wrist_vuer_mat, self.tv.left_hand.copy()
+        )
+        right_wrist_vuer_mat = mat_update(
+            const_right_wrist_vuer_mat, self.tv.right_hand.copy()
+        )
 
         # Change basis convention: VuerMat ((basis) OpenXR Convention) to WristMat ((basis) Robot Convention)
         # p.s. WristMat = T_{robot}_{openxr} * VuerMat * T_{robot}_{openxr}^T
@@ -151,13 +184,17 @@ class VisionWrapper:
         #   - finally, transform back to the Robot Convention (The function of T_{robot}_{openxr})
         #   This results in the same rotation effect under the Robot Convention as in the OpenXR Convention.
         head_mat = T_robot_openxr @ head_vuer_mat @ fast_mat_inv(T_robot_openxr)
-        left_wrist_mat  = T_robot_openxr @ left_wrist_vuer_mat @ fast_mat_inv(T_robot_openxr)
-        right_wrist_mat = T_robot_openxr @ right_wrist_vuer_mat @ fast_mat_inv(T_robot_openxr)
+        left_wrist_mat = (
+            T_robot_openxr @ left_wrist_vuer_mat @ fast_mat_inv(T_robot_openxr)
+        )
+        right_wrist_mat = (
+            T_robot_openxr @ right_wrist_vuer_mat @ fast_mat_inv(T_robot_openxr)
+        )
 
         # Change wrist convention: WristMat ((Left Wrist) XR/AppleVisionPro Convention) to UnitreeWristMat((Left Wrist URDF) Unitree Convention)
         # Reason for right multiply (T_to_unitree_left_wrist) : Rotate 90 degrees counterclockwise about its own x-axis.
         # Reason for right multiply (T_to_unitree_right_wrist): Rotate 90 degrees clockwise about its own x-axis.
-        unitree_left_wrist  = left_wrist_mat @ T_to_unitree_left_wrist
+        unitree_left_wrist = left_wrist_mat @ T_to_unitree_left_wrist
         unitree_right_wrist = right_wrist_mat @ T_to_unitree_right_wrist
 
         # --------------------------------hand-------------------------------------
@@ -169,32 +206,48 @@ class VisionWrapper:
         #    y0 y1 y1 ··· y23 y24
         #    z0 z1 z2 ··· z23 z24
         #     1  1  1 ···   1   1
-        left_hand_vuer_mat  = np.concatenate([self.tv.left_landmarks.copy().T, np.ones((1, self.tv.left_landmarks.shape[0]))])
-        right_hand_vuer_mat = np.concatenate([self.tv.right_landmarks.copy().T, np.ones((1, self.tv.right_landmarks.shape[0]))])
+        left_hand_vuer_mat = np.concatenate(
+            [
+                self.tv.left_landmarks.copy().T,
+                np.ones((1, self.tv.left_landmarks.shape[0])),
+            ]
+        )
+        right_hand_vuer_mat = np.concatenate(
+            [
+                self.tv.right_landmarks.copy().T,
+                np.ones((1, self.tv.right_landmarks.shape[0])),
+            ]
+        )
 
         # Change basis convention: from (basis) OpenXR Convention to (basis) Robot Convention
         # Just a change of basis for 3D points. No rotation, only translation. No need to right-multiply fast_mat_inv(T_robot_openxr).
-        left_hand_mat  = T_robot_openxr @ left_hand_vuer_mat
+        left_hand_mat = T_robot_openxr @ left_hand_vuer_mat
         right_hand_mat = T_robot_openxr @ right_hand_vuer_mat
 
         # Transfer from WORLD to WRIST coordinate. (this process under (basis) Robot Convention)
         # p.s.  HandMat_WristBased = WristMat_{wrold}_{wrist}^T * HandMat_{wrold}
         #       HandMat_WristBased = WristMat_{wrist}_{wrold}   * HandMat_{wrold}, that is HandMat_{wrist}
-        left_hand_mat_wb  = fast_mat_inv(left_wrist_mat) @ left_hand_mat
+        left_hand_mat_wb = fast_mat_inv(left_wrist_mat) @ left_hand_mat
         right_hand_mat_wb = fast_mat_inv(right_wrist_mat) @ right_hand_mat
         # Change hand convention: HandMat ((Left Hand) XR/AppleVisionPro Convention) to UnitreeHandMat((Left Hand URDF) Unitree Convention)
-        # Reason for left multiply : T_to_unitree_hand @ left_hand_mat_wb ==> (4,4) @ (4,25) ==> (4,25), (4,25)[0:3, :] ==> (3,25), (3,25).T ==> (25,3)           
+        # Reason for left multiply : T_to_unitree_hand @ left_hand_mat_wb ==> (4,4) @ (4,25) ==> (4,25), (4,25)[0:3, :] ==> (3,25), (3,25).T ==> (25,3)
         # Now under (Left Hand URDF) Unitree Convention, mat shape like this:
         #    [x0, y0, z0]
         #    [x1, y1, z1]
         #    ···
-        #    [x23,y23,z23] 
-        #    [x24,y24,z24]               
-        unitree_left_hand  = (T_to_unitree_hand @ left_hand_mat_wb)[0:3, :].T
+        #    [x23,y23,z23]
+        #    [x24,y24,z24]
+        unitree_left_hand = (T_to_unitree_hand @ left_hand_mat_wb)[0:3, :].T
         unitree_right_hand = (T_to_unitree_hand @ right_hand_mat_wb)[0:3, :].T
 
-        return head_mat, unitree_left_wrist, unitree_right_wrist, unitree_left_hand, unitree_right_hand
-    
+        return (
+            head_mat,
+            unitree_left_wrist,
+            unitree_right_wrist,
+            unitree_left_hand,
+            unitree_right_hand,
+        )
+
     def get_data_avp_stream(self):
 
         # --------------------------------wrist-------------------------------------
@@ -206,16 +259,26 @@ class VisionWrapper:
         data = self.tv.latest
         if data is None:
             return
-        
-        head_mat = data['head'][0].copy()
-        left_wrist_mat = data['left_wrist'][0].copy()
-        right_wrist_mat = data['right_wrist'][0].copy()
+
+        head_mat = data["head"][0].copy()
+        left_wrist_mat = data["left_wrist"][0].copy()
+        right_wrist_mat = data["right_wrist"][0].copy()
 
         head_mat = T_z_90 @ head_mat @ T_z_90.T
         left_wrist_mat = T_z_90 @ left_wrist_mat @ T_x_180.T
         right_wrist_mat = T_z_90 @ right_wrist_mat @ T_z_180.T
 
-        left_hand_mat = np.einsum('bik,bkj->bij', T_flip_left, data['left_fingers'].copy())
-        right_hand_mat = np.einsum('bik,bkj->bij', T_flip_right, data['right_fingers'].copy())
+        left_hand_mat = np.einsum(
+            "bik,bkj->bij", T_flip_left, data["left_fingers"].copy()
+        )
+        right_hand_mat = np.einsum(
+            "bik,bkj->bij", T_flip_right, data["right_fingers"].copy()
+        )
 
-        return head_mat, left_wrist_mat, right_wrist_mat, left_hand_mat[:, :3, 3], right_hand_mat[:, :3, 3]
+        return (
+            head_mat,
+            left_wrist_mat,
+            right_wrist_mat,
+            left_hand_mat[:, :3, 3],
+            right_hand_mat[:, :3, 3],
+        )
