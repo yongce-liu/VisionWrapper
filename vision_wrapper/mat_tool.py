@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def mat_update(prev_mat, mat):
     if np.linalg.det(mat) == 0:
         return prev_mat
